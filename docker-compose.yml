@@ -1,22 +1,56 @@
-# See doc/docker/README.md or https://github.com/instructure/canvas-lms/tree/master/doc/docker
 services:
-  web: &WEB
+  web:
     build:
       context: .
-    links:
+      dockerfile: Dockerfile.source
+    environment:
+      RAILS_ENV: production
+      CANVAS_LMS_ADMIN_EMAIL: ${ADMIN_EMAIL}
+      CANVAS_LMS_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CANVAS_LMS_ACCOUNT_NAME: ${INSTITUTION_NAME}
+      CANVAS_LMS_STATS_COLLECTION: opt_out
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:80"
+    depends_on:
       - postgres
       - redis
-    environment:
-      POSTGRES_PASSWORD: sekret
-
-  jobs:
-    <<: *WEB
-    command: bundle exec script/delayed_job run
+    volumes:
+      - canvas-data:/usr/src/app/public
+      - ./config:/usr/src/app/config
+      - canvas-log:/usr/src/app/log
 
   postgres:
-    build: ./docker-compose/postgres
+    image: postgres:13
     environment:
-      POSTGRES_PASSWORD: sekret
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
 
   redis:
-    image: redis:alpine
+    image: redis:6
+    volumes:
+      - redis-data:/data
+
+  jobs:
+    build:
+      context: .
+      dockerfile: Dockerfile.source
+    environment:
+      RAILS_ENV: production
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      REDIS_URL: redis://redis:6379
+    command: bundle exec script/delayed_job run
+    depends_on:
+      - web
+      - postgres
+      - redis
+
+volumes:
+  canvas-data:
+  canvas-log:
+  postgres-data:
+  redis-data:
